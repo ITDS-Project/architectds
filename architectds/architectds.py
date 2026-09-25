@@ -2741,20 +2741,20 @@ class GenericFilesystem(GenericBinary):
                         with open('word-wrapped-structs.txt') as f:
                             word_wrapped_structs = [f.strip() for f in f.readlines()]
 
-                        if os.path.basename(file) in word_wrapped_structs:
-                            for locale in config_json['locales']['available_locales']:
-                                if root.endswith(locale['id']):
-                                    default_font = os.path.join(font_dir, f"{[font['font'] for font in locale['fonts'] if font['name'] == locale['default_font']][0]}.ttf")
-                                    max_width = locale['max_width'] if not file.endswith('_modals.njson') else locale['max_width_modal']
-                                    ww = locale['ww_delim_or_spacy']
-                                    break
-                            self.prebuild_ninja.print(
-                                f'build {out_bin}: structify {json_file} || {out_dir}\n'
-                                f'  font = {default_font}\n'
-                                f'  max_width = {max_width}\n'
-                                f'  word_wrap = "{ww}"\n'
-                                '\n'
-                            )
+                            if os.path.basename(file) in word_wrapped_structs:
+                                for locale in config_json['locales']['available_locales']:
+                                    if root.endswith(locale['id']):
+                                        default_font = os.path.join(font_dir, f"{[font['font'] for font in locale['fonts'] if font['name'] == locale['default_font']][0]}.ttf")
+                                        max_width = locale['max_width'] if not file.endswith('_modals.njson') else locale['max_width_modal']
+                                        ww = locale['ww_delim_or_spacy']
+                                        break
+                                self.prebuild_ninja.print(
+                                    f'build {out_bin}: structify {json_file} || {out_dir}\n'
+                                    f'  font = {default_font}\n'
+                                    f'  max_width = {max_width}\n'
+                                    f'  word_wrap = "{ww}"\n'
+                                    '\n'
+                                )
                         else:
                             self.prebuild_ninja.print(
                                 f'build {out_bin}: structify {json_file} || {out_dir}\n'

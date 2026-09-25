@@ -152,6 +152,7 @@ class GenericBinary():
         self.flag_assets_name = flag_assets_name
         self.contents = ''
         self.dir_targets = set()
+        self.wav_it_targets = set()
 
     def print(self, string):
         '''
@@ -349,6 +350,7 @@ class GenericBinary():
             'GEN_FONT    = python3 build_scripts/generate_font.py\n'
             'SIZE_IMG    = python3 build_scripts/size_image.py\n'
             'TEXANIM     = python3 build_scripts/convert_texanims.py\n'
+            'WAV2IT      = python3 build_scripts/wav_to_it.py\n'
             '\n'
         )
 
@@ -367,6 +369,9 @@ class GenericBinary():
             '\n'
             'rule mmutil_mas\n'
             '  command =  ${MMUTIL} $in -d -m -o${out}\n'
+            '\n'
+            'rule mmutil_h\n'
+            '  command =  ${MMUTIL} $in -d -o${tmp_bin} -h${soundbank_info_h} && rm ${tmp_bin}\n'
             '\n'
             'rule as_arm\n'
             '  command = ${CC_ARM} ${asflags} -MMD -MP -c -o $out $in\n'
@@ -457,6 +462,9 @@ class GenericBinary():
             '\n'
             'rule size_image\n'
             '  command = ${SIZE_IMG} $in $out\n'
+            '\n'
+            'rule wav2it\n'
+            '  command = ${WAV2IT} $in -o $out\n'
             '\n'
         )
 
@@ -2420,7 +2428,11 @@ class GenericFilesystem(GenericBinary):
         in_out_files = []
 
         for in_dir in in_dirs:
-            in_files = gen_input_file_list(in_dir, ('.blend'))
+            in_files = []
+            for blend in os.listdir(in_dir):
+                for f in os.listdir(os.path.join(in_dir, blend)):
+                    if f.endswith('.blend'):
+                        in_files.append(os.path.join(in_dir, blend, f))
             for exclude_dir in exclude_dirs:
                 in_files.remove(os.path.join(in_dir, exclude_dir, f'{exclude_dir}.blend'))
             in_out_files.extend(gen_out_file_list(in_files, in_dir, full_out_dir, '.blend', ''))
@@ -2557,14 +2569,37 @@ class GenericFilesystem(GenericBinary):
                             '\n'
                         )
 
+    def wav_to_it(self, in_dirs: list):
+        in_out_files = []
+
+        for in_dir in in_dirs:
+            in_files = gen_input_file_list(in_dir, ('.wav'))
+            in_out_files.extend(gen_out_file_list(in_files, in_dir, in_dir.replace('/mod', '/sfx'), '.wav', '.it'))
+
+        for in_out_file in in_out_files:
+            self.prebuild_ninja.wav_it_targets.add(in_out_file.out_path)
+            self.prebuild_ninja.print(
+                f'build {in_out_file.out_path}: wav2it {in_out_file.in_path}\n'
+                '\n'
+                )
+
     def pregen_mmutil(self, in_dirs: list):
-        mmutil = ["/opt/wonderful/thirdparty/blocksds/core/tools/mmutil/mmutil", "-d"]
-        for dir in in_dirs:
-            for snd in os.scandir(dir):
-                mmutil.append(snd.path)
-        mmutil.extend(['-otmp.bin', '-hsoundbank.h'])
-        subprocess.run(mmutil)
-        os.remove('tmp.bin')
+        in_audio_files = []
+        for in_dir in in_dirs:
+            in_files = gen_input_file_list(in_dir, ('.it', '.mod', '.s3m', '.xm', '.wav'))
+            in_audio_files.extend(in_files)
+
+        tmp_bin = os.path.join(os.path.curdir, 'tmp.bin')
+        out_path_info_h = os.path.join(os.path.curdir, 'soundbank.h')
+
+        all_audio_files = ' '.join(in_audio_files)
+        wav_it_gate = '' if len(self.prebuild_ninja.wav_it_targets) == 0 else f' || {" ".join(self.prebuild_ninja.wav_it_targets)}'
+        self.prebuild_ninja.print(
+            f'build {out_path_info_h} : mmutil_h {all_audio_files}{wav_it_gate}\n'
+            f'  tmp_bin = {tmp_bin}\n'
+            f'  soundbank_info_h = {out_path_info_h}\n'
+            '\n'
+        )
 
     def pregen_struct_headers(self, in_dirs: list):
         self.prebuild_ninja.add_dir_target('src/common/typedefs')
@@ -2702,11 +2737,15 @@ class GenericFilesystem(GenericBinary):
                         out_dir = os.path.dirname(out_bin)
                         self.prebuild_ninja.add_dir_target(out_dir)
 
-                        if file.endswith('items.njson') or file.endswith('abilities.njson'):
+                        word_wrapped_structs = []
+                        with open('word-wrapped-structs.txt') as f:
+                            word_wrapped_structs = [f.strip() for f in f.readlines()]
+
+                        if os.path.basename(file) in word_wrapped_structs:
                             for locale in config_json['locales']['available_locales']:
                                 if root.endswith(locale['id']):
                                     default_font = os.path.join(font_dir, f"{[font['font'] for font in locale['fonts'] if font['name'] == locale['default_font']][0]}.ttf")
-                                    max_width = locale['max_width']
+                                    max_width = locale['max_width'] if not file.endswith('_modals.njson') else locale['max_width_modal']
                                     ww = locale['ww_delim_or_spacy']
                                     break
                             self.prebuild_ninja.print(

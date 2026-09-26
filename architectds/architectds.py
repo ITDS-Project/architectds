@@ -2741,13 +2741,17 @@ class GenericFilesystem(GenericBinary):
                         with open('word-wrapped-structs.txt') as f:
                             for s in f.readlines():
                                 split = s.strip().split(' ')
-                                word_wrapped_structs[split[0]] = int(split[1])
+                                word_wrapped_structs[split[0]] = {}
+                                if len(split) > 1:
+                                    for i in range(1, len(split)):
+                                        lang_split = split[i].split(':')
+                                        word_wrapped_structs[split[0]][lang_split[0]] = int(lang_split[1])
 
                         if os.path.basename(file) in word_wrapped_structs:
                             for locale in config_json['locales']['available_locales']:
                                 if root.endswith(locale['id']):
                                     default_font = os.path.join(font_dir, f"{[font['font'] for font in locale['fonts'] if font['name'] == locale['default_font']][0]}.ttf")
-                                    max_width = word_wrapped_structs[os.path.basename(file)]
+                                    max_width = word_wrapped_structs[os.path.basename(file)][locale['id']] if locale['id'] in word_wrapped_structs[os.path.basename(file)] else (word_wrapped_structs[os.path.basename(file)][''] if '' in word_wrapped_structs[os.path.basename(file)] else locale['max_width'])
                                     ww = locale['ww_delim_or_spacy']
                                     break
                             self.prebuild_ninja.print(
